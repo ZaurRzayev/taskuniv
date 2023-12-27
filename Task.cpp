@@ -1,83 +1,86 @@
 #include <iostream>
+#include <thread>
 #include <vector>
 #include <numeric>
-#include <thread>
-#include <mutex>
-#include <chrono>
 
-void calculateRunningSum(const std::vector<int>& data, int& result, std::mutex& mtx, double& duration) {
-    auto start = std::chrono::steady_clock::now();
-    int partialSum = std::accumulate(data.begin(), data.end(), 0);
-    auto end = std::chrono::steady_clock::now();
-
-    std::lock_guard<std::mutex> lock(mtx);
-    result += partialSum;
-    duration = std::chrono::duration<double>(end - start).count();
+// A function that computes the running sum of an array
+void run_sum(std::vector<int>& arr, std::vector<int>& sums) {
+    // Use std::accumulate to compute the sum of the range [arr.begin(), arr.end())
+    // and store it in the last element of sums
+    sums.back() = std::accumulate(arr.begin(), arr.end(), 0);
 }
 
-void calculateRunningProduct(const std::vector<int>& data, unsigned long long& result, std::mutex& mtx, double& duration) {
-    auto start = std::chrono::steady_clock::now();
-    unsigned long long partialProduct = 1ULL;
-    for (int val : data) {
-        partialProduct *= static_cast<unsigned long long>(val);
-    }
-    auto end = std::chrono::steady_clock::now();
+// A function that computes the running product of an array
+void run_product(std::vector<int>& arr, std::vector<int>& products) {
+    // Use std::accumulate to compute the product of the range [arr.begin(), arr.end())
+    // and store it in the last element of products
+    // Use std::multiplies<int>() as the binary operation
+    products.back() = std::accumulate(arr.begin(), arr.end(), 1, std::multiplies<int>());
+}
 
-    std::lock_guard<std::mutex> lock(mtx);
-    result *= partialProduct;
-    duration = std::chrono::duration<double>(end - start).count();
+// A function that prints the running sum and product of an array
+void print_result(std::vector<int>& arr, std::vector<int>& sums, std::vector<int>& products) {
+    // Print the array
+    std::cout << "The array is: ";
+    for (int x : arr) {
+        std::cout << x << " ";
+    }
+    std::cout << "\n";
+
+    // Print the running sum
+    std::cout << "The running sum is: ";
+    for (int x : sums) {
+        std::cout << x << " ";
+    }
+    std::cout << "\n";
+
+    // Print the running product
+    std::cout << "The running product is: ";
+    for (int x : products) {
+        std::cout << x << " ";
+    }
+    std::cout << "\n";
 }
 
 int main() {
-    const int size = 10000000000;
-    const int numThreads = 16;
+    // Test the code with some examples
+    std::vector<int> arr1 = {1, 2, 3, 4, 5};
+    std::vector<int> arr2 = {5, 4, 3, 2, 1};
+    std::vector<int> arr3 = {1, 3, 2, 5, 4};
 
-    std::vector<int> values(size, 2);
+    // Create vectors to store the running sum and product of each array
+    // Initialize them with the same size as the array and zero values
+    std::vector<int> sums1(arr1.size(), 0);
+    std::vector<int> sums2(arr2.size(), 0);
+    std::vector<int> sums3(arr3.size(), 0);
 
-    int totalSum = 0;
-    unsigned long long totalProduct = 1ULL;
+    std::vector<int> products1(arr1.size(), 0);
+    std::vector<int> products2(arr2.size(), 0);
+    std::vector<int> products3(arr3.size(), 0);
 
-    std::mutex sumMutex;
-    std::mutex productMutex;
+    // Create threads to compute the running sum and product of each array
+    // Pass the arrays and the result vectors as references to the functions
+    std::thread t1(run_sum, std::ref(arr1), std::ref(sums1));
+    std::thread t2(run_product, std::ref(arr1), std::ref(products1));
 
-    std::vector<std::thread> threads;
-    std::vector<double> sumDurations(numThreads);
-    std::vector<double> productDurations(numThreads);
+    std::thread t3(run_sum, std::ref(arr2), std::ref(sums2));
+    std::thread t4(run_product, std::ref(arr2), std::ref(products2));
 
-    auto overallStart = std::chrono::steady_clock::now();
+    std::thread t5(run_sum, std::ref(arr3), std::ref(sums3));
+    std::thread t6(run_product, std::ref(arr3), std::ref(products3));
 
-    for (int i = 0; i < numThreads; ++i) {
-        int start = i * (size / numThreads);
-        int end = (i + 1) * (size / numThreads);
+    // Wait for the threads to finish
+    t1.join();
+    t2.join();
+    t3.join();
+    t4.join();
+    t5.join();
+    t6.join();
 
-        threads.emplace_back([&values, start, end, &totalSum, &sumMutex, &totalProduct, &productMutex, &sumDurations, &productDurations, i]() {
-            std::vector<int> subData(values.begin() + start, values.begin() + end);
-            double sumDuration = 0.0, productDuration = 0.0;
-
-            calculateRunningSum(subData, totalSum, sumMutex, sumDuration);
-            calculateRunningProduct(subData, totalProduct, productMutex, productDuration);
-
-            sumDurations[i] = sumDuration;
-            productDurations[i] = productDuration;
-            });
-    }
-
-    for (auto& thread : threads) {
-        thread.join();
-    }
-
-    auto overallEnd = std::chrono::steady_clock::now();
-    double overallDuration = std::chrono::duration<double>(overallEnd - overallStart).count();
-
-    std::cout << "Running Sum: " << totalSum << std::endl;
-    std::cout << "Running Product: " << totalProduct << std::endl;
-
-    for (int i = 0; i < numThreads; ++i) {
-        std::cout << "Thread " << i << " - Sum Duration: " << sumDurations[i] << " seconds"
-            << ", Product Duration: " << productDurations[i] << " seconds" << std::endl;
-    }
-
-    std::cout << "Overall Duration: " << overallDuration << " seconds" << std::endl;
+    // Print the results
+    print_result(arr1, sums1, products1);
+    print_result(arr2, sums2, products2);
+    print_result(arr3, sums3, products3);
 
     return 0;
 }
